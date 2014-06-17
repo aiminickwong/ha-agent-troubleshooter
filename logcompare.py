@@ -157,9 +157,9 @@ elif len(host2_hist) < len(host1_hist):
 else:
 	lower = len(host1_hist)   # doesn't matter which length is used, it's the same
 	
-#print colors.DBLUE + "Using " + str(lower) + " as the smaller of the two lengths"
+print colors.DBLUE + "Using " + str(lower) + " as the smaller of the two lengths"
 
-for x in range(0,lower-1):  
+for x in range(0,lower-1, 2):  
 	#print x
 	timestamp1 = host1_hist[x]['ts']
 	timestamp2 = host2_hist[x+1]['ts']
@@ -211,3 +211,4 @@ for x in range(0,lower-1):
 			print_table_row(timestamp1,health1,score1,vm1,vm2,score2,health2)	
 		#else: # check to see which has the earlier timestamp, print it first without host informating in opposite column
 			#print "Greater than 5 second time skew, skipping"	
+
