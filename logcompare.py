@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, re
+import sys, re, datetime
 
 # Define colors - yay color!
 # Need more - build out later
@@ -96,11 +96,11 @@ def parse_host_stats(loglines, hostname):
 			parse the dict embedded in the line
 	'''
 	host_history = []
-	history_item = {}
 	p = re.compile('\{.*\}')
 	ts = re.compile('\d{2}:\d{2}:\d{2}')
 	
 	for line in loglines:
+		history_item = {}
 		if 'collect_all_host_stat' in line and not 'Global' in line:
 			if len(p.findall(line)) > 0:
 				l = eval(p.findall(line)[0])
@@ -140,7 +140,6 @@ print colors.BLUE + "Finding host history in logs..."+colors.ENDC
 host1_hist = parse_host_stats(LOG1_LINES, HOSTNAMES[0])
 #print host1_hist
 
-
 host2_hist = parse_host_stats(LOG1_LINES, HOSTNAMES[1])
 #print host2_hist
 			
@@ -158,20 +157,21 @@ elif len(host2_hist) < len(host1_hist):
 else:
 	lower = len(host1_hist)   # doesn't matter which length is used, it's the same
 	
-print colors.DBLUE + "Using " + str(lower) + " as the smaller of the two lengths"
+#print colors.DBLUE + "Using " + str(lower) + " as the smaller of the two lengths"
 
-for x in range(0,lower):
-	#print colors.DBLUE + "x = " + str(x)
+for x in range(0,lower-1):  
+	#print x
 	timestamp1 = host1_hist[x]['ts']
-	#print "Set timestamp: "+timestamp1
-	timestamp2 = host2_hist[x]['ts']
-	#print "Set timestamp: "+timestamp2
-	#print colors.DBLUE + "Checking timestamps on the " + str(x) +"th run."
+	timestamp2 = host2_hist[x+1]['ts']
+	ts1 = datetime.time(int(timestamp1.split(":")[0]), int(timestamp1.split(":")[1]), int(timestamp1.split(":")[2]))
+	ts2 = datetime.time(int(timestamp2.split(":")[0]), int(timestamp2.split(":")[1]), int(timestamp2.split(":")[2]))
+
+	#print "Comparing ts1 ("+timestamp1+") to ts2 ("+timestamp2+")"
 	'''
 	Right now we just check for matching timestamps.
 	TODO: Allow for table rows that only have information for one host or the other
 	'''
-	if timestamp1 == timestamp2:
+	if ts1 == ts2:
 		#print colors.DBLUE + "Found matching timestamps"
 		line_ts = timestamp1   # doesn't matter, same value
 		#print line_ts
@@ -181,13 +181,33 @@ for x in range(0,lower):
 			vm1 = 'X'
 		else:
 			vm1 = '-'
-		if host2_hist[x]['runningVM']:
+		if host2_hist[x+1]['runningVM']:
 			vm2 = 'X'
 		else:
 			vm2 = '-'
-		score2 = host2_hist[x]['score']
-		health2 = host2_hist[x]['health']
+		score2 = host2_hist[x+1]['score']
+		health2 = host2_hist[x+1]['health']
 		print_table_row(line_ts,health1,score1,vm1,vm2,score2,health2)
 	else:
-		break
-	
+		TS_FORMAT = '%H:%M:%S'
+		# compare seconds in timestamp, allow a ~5s windows of time drift
+		tsdelta = datetime.datetime.strptime(timestamp2, TS_FORMAT) - datetime.datetime.strptime(timestamp1, TS_FORMAT)
+		#print "tdelta: " + str(tsdelta)
+		#print "Found non-matching timestamps, comparing "+timestamp1+"s to "+timestamp2+"s"
+		if tsdelta.seconds <= 5:
+			line_ts = timestamp1   # doesn't matter, same value
+			health1 = host1_hist[x]['health']
+			score1 = host1_hist[x]['score']
+			if host1_hist[x]['runningVM']:
+				vm1 = 'X'
+			else:
+				vm1 = '-'
+			if host2_hist[x+1]['runningVM']:
+				vm2 = 'X'
+			else:
+				vm2 = '-'
+			score2 = host2_hist[x+1]['score']
+			health2 = host2_hist[x+1]['health']
+			print_table_row(timestamp1,health1,score1,vm1,vm2,score2,health2)	
+		#else: # check to see which has the earlier timestamp, print it first without host informating in opposite column
+			#print "Greater than 5 second time skew, skipping"	
