@@ -109,6 +109,7 @@ def parse_host_stats(loglines, hostname):
 				l = eval(p.findall(line)[0])
 				time = ts.findall(line)[0]
 				history_item['ts'] = str(time)
+				#print "Set time for hist_item to " + str(time)
 				history_item['health'] = l['engine-status']['health']
 				history_item['score'] = l['score']
 				if 'up' in l['engine-status']['vm']:
@@ -144,9 +145,14 @@ host1_hist = parse_host_stats(LOG1_LINES, HOSTNAMES[0])
 
 
 host2_hist = parse_host_stats(LOG1_LINES, HOSTNAMES[1])
+#print host2_hist
 			
 print_table_header(HOSTNAMES[0], HOSTNAMES[1])
 
+'''
+Below we check to see if one host has fewer log lines than the other.
+TODO: If one file is bigger, add loop for the difference.
+'''
 lower = 0
 if len(host1_hist) < len(host2_hist):
 	lower = len(host1_hist)
@@ -160,11 +166,18 @@ print colors.DBLUE + "Using " + str(lower) + " as the smaller of the two lengths
 for x in range(0,lower):
 	#print colors.DBLUE + "x = " + str(x)
 	timestamp1 = host1_hist[x]['ts']
+	#print "Set timestamp: "+timestamp1
 	timestamp2 = host2_hist[x]['ts']
+	#print "Set timestamp: "+timestamp2
 	#print colors.DBLUE + "Checking timestamps on the " + str(x) +"th run."
+	'''
+	Right now we just check for matching timestamps.
+	TODO: Allow for table rows that only have information for one host or the other
+	'''
 	if timestamp1 == timestamp2:
 		#print colors.DBLUE + "Found matching timestamps"
 		line_ts = timestamp1   # doesn't matter, same value
+		#print line_ts
 		health1 = host1_hist[x]['health']
 		score1 = host1_hist[x]['score']
 		if host1_hist[x]['runningVM']:
