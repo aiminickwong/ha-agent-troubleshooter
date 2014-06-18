@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, re, datetime
+import sys, re, datetime, time
 
 # Define colors - yay color!
 # Need more - build out later
@@ -26,7 +26,7 @@ for arg in sys.argv[1:]:
 	ha_logs.append(arg)
 	
 if len(ha_logs) < 2:
-	print colors.WARN + "Less than 2 files specififed, try again" + colors.ENDC
+	print colors.WARN + "Less than 2 files specififed!" + colors.ENDC
 	sys.exit()
 	
 print colors.HEADER + "Comparing the following files:" + colors.ENDC
@@ -128,6 +128,79 @@ def print_table_row(timestamp, health1, score1, vm1, vm2, score2, health2):
 	print colors.HEADER + "{:12}\t{:^6}\t{:^3}\t{:^3} | {:^3}\t{:^5}\t{:^5}".format(timestamp,health1,score1,vm1,vm2,score2,health2)+colors.ENDC
 	
 	
+def find_score_penalties(hostname, logfile):
+	'''
+	In hosted_engine.py the _generate_local_blocks() method is used to calculate HA score
+	This method will attempt to find any changes in score by looking for that ^^ method name in the log file and parsing the line
+	'''
+	score_log = []
+	
+	print "\n"+colors.HEADER_BOLD + "HA Score analysis for host " + hostname
+	print "===============================================" + colors.ENDC
+	
+	# open the passed file
+	try:
+		openfile = open(logfile, 'r')
+	except:
+		print "Error loading file, exiting.."
+		sys.exit()
+		
+	line_count = 0
+	for line in openfile.readlines():
+
+		if 'generate_local_block' in line:
+			#print "Found line"
+			line_count += 1
+			scoreinfo = {}
+			
+			# set up regex for parsing lines
+			score_report = re.compile(ur'Score is\s(\d*).*to')
+			score_report_reason = re.compile(ur'to\s(.*)\sat')
+			penalty_score = re.compile(ur'by\s(\d.*)\sdue')
+			penalty_score_reason = re.compile(ur'due\sto\s(.*)\sat')
+			ts_regex = re.compile(ur'at\s(.*)\n')
+			ts_format = '%a %b  %d %H:%M:%S %Y'
+			
+			# reformat the timestamp to add zero padding to day of the month
+			if len(ts_regex.findall(line)) != 0:
+				padded_ts = re.sub(r'(\w{3})\s\s(\d{1})',r'\1 0\2', ts_regex.findall(line)[0])
+				# make the datetime object (for ease of comparison)
+				timestamp = datetime.datetime.strptime(padded_ts, ts_format)
+			else:
+				timestamp = 'ERR'
+			
+			
+			# Check to see if this is reporting a score
+			if len(score_report.findall(line)) != 0:
+				# SAMPLE: Score is 0 due to bad engine health at Thu Apr  3 08:01:59 2014
+				scoreinfo['score'] = str(score_report.findall(line)[0])
+				if len(score_report_reason.findall(line)) != 0:
+					scoreinfo['reason'] = "REPORT: " + score_report_reason.findall(line)[0]
+					scoreinfo['timestamp'] = timestamp
+					score_log.append(scoreinfo)
+			# Check to see if we're penalizing a score
+			elif len(penalty_score.findall(line)) != 0:
+				# SAMPLE: Penalizing score by 400 due to low free memory
+				scoreinfo['score'] = str(penalty_score.findall(line)[0])
+				if len(penalty_score_reason.findall(line)) != 0:
+					scoreinfo['reason'] = "PENALTY: " + penalty_score_reason.findall(line)[0]
+					scoreinfo['timestamp'] = timestamp
+					score_log.append(scoreinfo)
+			else:
+				print "Problematic line: " + line
+				
+	for x in range(0,len(score_log)-1):
+		pscore = score_log[x]['score']
+		preason = score_log[x]['reason']
+		ptimestamp = score_log[x]['timestamp']
+		
+		print str(ptimestamp) +": "+ preason + " - Score: " + pscore
+	
+
+				
+			
+			
+	
 load_logs(ha_logs)
 
 grab_host_stats(FILE_LIST)
@@ -142,7 +215,8 @@ host1_hist = parse_host_stats(LOG1_LINES, HOSTNAMES[0])
 
 host2_hist = parse_host_stats(LOG1_LINES, HOSTNAMES[1])
 #print host2_hist
-			
+
+print ""			
 print_table_header(HOSTNAMES[0], HOSTNAMES[1])
 
 '''
@@ -150,6 +224,7 @@ Below we check to see if one host has fewer log lines than the other.
 TODO: If one file is bigger, add loop for the difference.
 '''
 lower = 0
+print "Comparing length of host1_hist ("+str(len(host1_hist))+") to length of host2_hist ("+str(len(host2_hist))+")"
 if len(host1_hist) < len(host2_hist):
 	lower = len(host1_hist)
 elif len(host2_hist) < len(host1_hist):
@@ -157,7 +232,7 @@ elif len(host2_hist) < len(host1_hist):
 else:
 	lower = len(host1_hist)   # doesn't matter which length is used, it's the same
 	
-print colors.DBLUE + "Using " + str(lower) + " as the smaller of the two lengths"
+#print "Using " + str(lower) + " as the smaller of the two lengths"
 
 for x in range(0,lower-1, 2):  
 	#print x
@@ -195,7 +270,7 @@ for x in range(0,lower-1, 2):
 		#print "tdelta: " + str(tsdelta)
 		#print "Found non-matching timestamps, comparing "+timestamp1+"s to "+timestamp2+"s"
 		if tsdelta.seconds <= 5:
-			line_ts = timestamp1   # doesn't matter, same value
+			line_ts = timestamp1   # doesn't matter, same(ish) value
 			health1 = host1_hist[x]['health']
 			score1 = host1_hist[x]['score']
 			if host1_hist[x]['runningVM']:
@@ -212,3 +287,6 @@ for x in range(0,lower-1, 2):
 		#else: # check to see which has the earlier timestamp, print it first without host informating in opposite column
 			#print "Greater than 5 second time skew, skipping"	
 
+find_score_penalties(HOSTNAMES[0], ha_logs[0])
+print "\n"
+find_score_penalties(HOSTNAMES[1], ha_logs[1])
