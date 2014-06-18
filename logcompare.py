@@ -140,6 +140,7 @@ def find_score_penalties(hostname, logfile):
 	
 	# open the passed file
 	try:
+		#print "Opening file: " + logfile
 		openfile = open(logfile, 'r')
 	except:
 		print "Error loading file, exiting.."
@@ -153,14 +154,16 @@ def find_score_penalties(hostname, logfile):
 			line_count += 1
 			scoreinfo = {}
 			
+			#print "Setting up regex..."
 			# set up regex for parsing lines
 			score_report = re.compile(ur'Score is\s(\d*).*to')
 			score_report_reason = re.compile(ur'to\s(.*)\sat')
 			penalty_score = re.compile(ur'by\s(\d.*)\sdue')
-			penalty_score_reason = re.compile(ur'due\sto\s(.*)\sat')
+			penalty_score_reason = re.compile(ur'due\sto\s(.*)$')
 			ts_regex = re.compile(ur'at\s(.*)\n')
 			ts_format = '%a %b  %d %H:%M:%S %Y'
 			
+			#print "Reformatting timestamps..."
 			# reformat the timestamp to add zero padding to day of the month
 			if len(ts_regex.findall(line)) != 0:
 				padded_ts = re.sub(r'(\w{3})\s\s(\d{1})',r'\1 0\2', ts_regex.findall(line)[0])
@@ -169,32 +172,44 @@ def find_score_penalties(hostname, logfile):
 			else:
 				timestamp = 'ERR'
 			
-			
+			#print "Analyzing message: " + line
 			# Check to see if this is reporting a score
 			if len(score_report.findall(line)) != 0:
+				#print "Found score report in line"
 				# SAMPLE: Score is 0 due to bad engine health at Thu Apr  3 08:01:59 2014
 				scoreinfo['score'] = str(score_report.findall(line)[0])
 				if len(score_report_reason.findall(line)) != 0:
+					#print "Found report reason"
 					scoreinfo['reason'] = "REPORT: " + score_report_reason.findall(line)[0]
 					scoreinfo['timestamp'] = timestamp
 					score_log.append(scoreinfo)
 			# Check to see if we're penalizing a score
 			elif len(penalty_score.findall(line)) != 0:
+				#print "Found penalty report in line"
 				# SAMPLE: Penalizing score by 400 due to low free memory
 				scoreinfo['score'] = str(penalty_score.findall(line)[0])
 				if len(penalty_score_reason.findall(line)) != 0:
+					#print "Found report reason"
 					scoreinfo['reason'] = "PENALTY: " + penalty_score_reason.findall(line)[0]
 					scoreinfo['timestamp'] = timestamp
 					score_log.append(scoreinfo)
 			else:
 				print "Problematic line: " + line
 				
-	for x in range(0,len(score_log)-1):
-		pscore = score_log[x]['score']
-		preason = score_log[x]['reason']
-		ptimestamp = score_log[x]['timestamp']
+	#print "There are " + str(len(score_log)) + " lines to print."
+	if len(score_log) == 1:
+		pscore = score_log[0]['score']
+		preason = score_log[0]['reason']
+		ptimestamp = score_log[0]['timestamp']
 		
 		print str(ptimestamp) +": "+ preason + " - Score: " + pscore
+	else:	
+		for x in range(0,len(score_log)-1):
+			pscore = score_log[x]['score']
+			preason = score_log[x]['reason']
+			ptimestamp = score_log[x]['timestamp']
+		
+			print str(ptimestamp) +": "+ preason + " - Score: " + pscore
 	
 
 				
@@ -224,7 +239,7 @@ Below we check to see if one host has fewer log lines than the other.
 TODO: If one file is bigger, add loop for the difference.
 '''
 lower = 0
-print "Comparing length of host1_hist ("+str(len(host1_hist))+") to length of host2_hist ("+str(len(host2_hist))+")"
+#print "Comparing length of host1_hist ("+str(len(host1_hist))+") to length of host2_hist ("+str(len(host2_hist))+")"
 if len(host1_hist) < len(host2_hist):
 	lower = len(host1_hist)
 elif len(host2_hist) < len(host1_hist):
