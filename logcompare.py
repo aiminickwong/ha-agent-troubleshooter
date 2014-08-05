@@ -102,6 +102,7 @@ def parse_host_stats(loglines, hostname):
 	host_history = []
 	p = re.compile('\{.*\}')
 	ts = re.compile('\d{2}:\d{2}:\d{2}')
+	day = re.compile('\d{4}-\d{2}-\d{2}')
 	
 	for line in loglines:
 		history_item = {}
@@ -111,9 +112,11 @@ def parse_host_stats(loglines, hostname):
 				#print str(l)
 				try:	
 					time = ts.findall(line)[0]
+					datestamp = day.findall(line)[0]
 					history_item['ts'] = str(time)
 					#print "Set time for hist_item to " + str(time)
-					
+					history_item['date'] = str(datestamp)
+
 					history_item['health'] = l['engine-status']['health']
 					#print "Set history item health to " + history_item['health']
 					
@@ -136,9 +139,9 @@ def parse_host_stats(loglines, hostname):
 	
 	
 def print_table_header(host1, host2):
-	print colors.HEADER_BOLD+"{:9}\t{:^19} | {:^19}".format("",host1,host2)+colors.ENDC
+	print colors.HEADER_BOLD+"{:17}\t{:^19} | {:^19}".format("",host1,host2)+colors.ENDC
 	
-	print colors.HEADER + "{:9}\t{:6}\t{:3}\t{:3} | {:3}\t{:5}\t{:5}".format("Timestamp","Health","Score","VM?","VM?","Score","Health")+colors.ENDC
+	print colors.HEADER + "{:17}\t{:6}\t{:3}\t{:3} | {:3}\t{:5}\t{:5}".format("Timestamp","Health","Score","VM?","VM?","Score","Health")+colors.ENDC
 	
 def print_table_row(timestamp, health1, score1, vm1, vm2, score2, health2):
 	print colors.HEADER + "{:12}\t{:^6}\t{:^3}\t{:^3} | {:^3}\t{:^5}\t{:^5}".format(timestamp,health1,score1,vm1,vm2,score2,health2)+colors.ENDC
@@ -280,7 +283,7 @@ for x in range(0,lower-1, 2):
 	'''
 	if ts1 == ts2:
 		#print colors.DBLUE + "Found matching timestamps"
-		line_ts = timestamp1   # doesn't matter, same value
+		line_ts = host1_hist[x]['date'] + timestamp1   # doesn't matter, same value
 		#print line_ts
 		health1 = host1_hist[x]['health']
 		score1 = host1_hist[x]['score']
@@ -302,7 +305,7 @@ for x in range(0,lower-1, 2):
 		#print "tdelta: " + str(tsdelta)
 		#print "Found non-matching timestamps, comparing "+timestamp1+"s to "+timestamp2+"s"
 		if tsdelta.seconds <= 5:
-			line_ts = timestamp1   # doesn't matter, same(ish) value
+			line_ts = host1_hist[x]['date'] + timestamp1   # doesn't matter, same(ish) value
 			health1 = host1_hist[x]['health']
 			score1 = host1_hist[x]['score']
 			if host1_hist[x]['runningVM']:
@@ -315,11 +318,11 @@ for x in range(0,lower-1, 2):
 				vm2 = '-'
 			score2 = host2_hist[x+1]['score']
 			health2 = host2_hist[x+1]['health']
-			print_table_row(timestamp1,health1,score1,vm1,vm2,score2,health2)	
+			print_table_row(line_ts,health1,score1,vm1,vm2,score2,health2)	
 		else: # check to see which has the earlier timestamp, print it first without host informating in opposite column
 			#print "Greater than 5 second time skew, skipping"	
 			if timestamp1 > timestamp2:
-				line_ts = timestamp2
+				line_ts = host2_hist[x]['date'] + ' ' + timestamp2
 				health = host2_hist[x]['health']
 				score = host2_hist[x]['score']
 				if host2_hist[x]['runningVM']:
@@ -328,7 +331,7 @@ for x in range(0,lower-1, 2):
 					vmRunning = '-'
 				print_table_row(line_ts,'?','?','?',vmRunning,score,health)
 			else:
-				line_ts = timestamp1
+				line_ts = host1_hist[x]['date'] + ' ' + timestamp1
 				health = host1_hist[x]['health']
 				score = host1_hist[x]['score']
 				if host1_hist[x]['runningVM']:
