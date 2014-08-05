@@ -58,7 +58,7 @@ def grab_host_stats(logs):
 	
 	count = 0
 	for line in log1.readlines():
-		if '_collect_all_host_stats' in line:
+		if '_collect_all_host_stats' in line or 'state_machine' in line:
 			LOG1_LINES.append(line)
 			count += 1
 			
@@ -69,7 +69,7 @@ def grab_host_stats(logs):
 	
 	count = 0
 	for line in log2.readlines():
-		if '_collect_all_host_stats' in line:
+		if '_collect_all_host_stats' in line or 'state_machine' in line:
 			LOG2_LINES.append(line)
 			count += 1
 			
@@ -79,10 +79,14 @@ HOSTNAMES = []
 def find_hostnames(lines):
 	p = re.compile('\{.*\}')
 	for line in lines:
-		if 'collect_all_host_stat' in line and not 'Global' in line:
+		if 'collect_all_host_stat' in line or 'state_machine' in line and not 'Global' in line:
 			if len(p.findall(line)) > 0:
 				l = eval(p.findall(line)[0])
-				hn = l['hostname']
+				#print str(l)
+				try:
+					hn = l['hostname']
+				except:
+					pass
 				if not hn in HOSTNAMES:
 					HOSTNAMES.append(hn)
 					print "Adding host " + hn + " to list"
@@ -101,20 +105,32 @@ def parse_host_stats(loglines, hostname):
 	
 	for line in loglines:
 		history_item = {}
-		if 'collect_all_host_stat' in line and not 'Global' in line:
+		if 'collect_all_host_stat' in line or 'state_machine' in line and not 'Global' in line and not 'engine-health' in line:
 			if len(p.findall(line)) > 0:
 				l = eval(p.findall(line)[0])
-				time = ts.findall(line)[0]
-				history_item['ts'] = str(time)
-				#print "Set time for hist_item to " + str(time)
-				history_item['health'] = l['engine-status']['health']
-				history_item['score'] = l['score']
-				if 'up' in l['engine-status']['vm']:
-					history_item['runningVM'] = True
-				else:
-					history_item['runningVM'] = False
-				#print history_item
-				host_history.append(history_item)
+				#print str(l)
+				try:	
+					time = ts.findall(line)[0]
+					history_item['ts'] = str(time)
+					#print "Set time for hist_item to " + str(time)
+					
+					history_item['health'] = l['engine-status']['health']
+					#print "Set history item health to " + history_item['health']
+					
+					history_item['score'] = l['score']
+					#print "Set history item score to " + str(history_item['score'])
+			
+					try:	
+						if 'up' in l['engine-status']['vm']:
+							history_item['runningVM'] = True
+						else:
+							history_item['runningVM'] = False
+					except:
+						print "Didn't find engine-status"
+					#print history_item
+					host_history.append(history_item)
+				except Exception as e: # adding for state_machine lines that don't contain the above information
+					print "Fail: " + e.message
 	print "Found " + str(len(host_history)) + " history items for host "+hostname
 	return host_history
 	
@@ -222,13 +238,14 @@ grab_host_stats(FILE_LIST)
 
 print colors.BLUE + "Finding hostnames..." + colors.ENDC
 find_hostnames(LOG1_LINES)
+find_hostnames(LOG2_LINES)
 
 print colors.BLUE + "Finding host history in logs..."+colors.ENDC
 
 host1_hist = parse_host_stats(LOG1_LINES, HOSTNAMES[0])
 #print host1_hist
 
-host2_hist = parse_host_stats(LOG1_LINES, HOSTNAMES[1])
+host2_hist = parse_host_stats(LOG2_LINES, HOSTNAMES[1])
 #print host2_hist
 
 print ""			
@@ -299,8 +316,26 @@ for x in range(0,lower-1, 2):
 			score2 = host2_hist[x+1]['score']
 			health2 = host2_hist[x+1]['health']
 			print_table_row(timestamp1,health1,score1,vm1,vm2,score2,health2)	
-		#else: # check to see which has the earlier timestamp, print it first without host informating in opposite column
+		else: # check to see which has the earlier timestamp, print it first without host informating in opposite column
 			#print "Greater than 5 second time skew, skipping"	
+			if timestamp1 > timestamp2:
+				line_ts = timestamp2
+				health = host2_hist[x]['health']
+				score = host2_hist[x]['score']
+				if host2_hist[x]['runningVM']:
+					vmRunning = 'X'
+				else:
+					vmRunning = '-'
+				print_table_row(line_ts,'?','?','?',vmRunning,score,health)
+			else:
+				line_ts = timestamp1
+				health = host1_hist[x]['health']
+				score = host1_hist[x]['score']
+				if host1_hist[x]['runningVM']:
+					vmRunning = 'X'
+				else:
+					vmRunning = '-'
+				print_table_row(line_ts,health,score,vmRunning,'?','?','?')
 
 find_score_penalties(HOSTNAMES[0], ha_logs[0])
 print "\n"
